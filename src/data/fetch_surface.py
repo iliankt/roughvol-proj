@@ -1,15 +1,18 @@
 from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
 from ibapi.contract import Contract
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Thread
 from threading import Event
 import pandas as pd
+import os
+import glob
 
-class IBApp(EClient,EWrapper):
+
+class IBApp(EClient, EWrapper):
 
     def __init__(self):
-        EClient.__init__(self,self)
+        EClient.__init__(self, self)
         self.conId = None
         self.expirations = set()
         self.strikes = set()
@@ -80,7 +83,7 @@ def _build_option(symbol, expiration, strike, right, tradingClass,
 
 def fetch_chain(symbol, secType='STK', exchange='SMART', currency='USD'):
     app = IBApp()
-    _start(app)
+    _start(app, clientId=1)
 
     underlying = Contract()
     underlying.symbol = symbol
@@ -103,7 +106,7 @@ def fetch_chain(symbol, secType='STK', exchange='SMART', currency='USD'):
 def fetch_surface(symbol, expiration, strikes, tradingClass, rights=('C', 'P'),
                   exchange='SMART', currency='USD', multiplier='100'):
     app = IBApp()
-    _start(app)
+    _start(app, clientId=2)
     app.reqMarketDataType(3)
 
     reqId = 0
@@ -122,17 +125,53 @@ def fetch_surface(symbol, expiration, strikes, tradingClass, rights=('C', 'P'),
 
     return pd.DataFrame(list(app.data.values()))
 
+def save_surface(df, symbol, spot=None, base_dir='data', delayed=True):
+
+    ts = datetime.now(timezone.utc)
+    ts_str = ts.strftime('%Y%m%d_%H%M%S')
+
+    df = df.copy()
+    df['symbol'] = symbol
+    df['snapshot_utc'] = ts.isoformat()
+    df['spot'] = spot
+    df['delayed'] = delayed
+
+    out_dir = os.path.join(base_dir, symbol)
+    os.makedirs(out_dir, exist_ok=True)
+
+    path = os.path.join(out_dir, f'surface_{symbol}_{ts_str}.parquet')
+    df.to_parquet(path, index=False)
+    print(f"Snapshot sauvegarde : {path}  ({len(df)} lignes)")
+    return path
+
+
+def load_latest_surface(symbol, base_dir='data'):
+
+    pattern = os.path.join(base_dir, symbol, f'surface_{symbol}_*.parquet')
+    files = sorted(glob.glob(pattern))
+    if not files:
+        raise FileNotFoundError(f"Aucun snapshot pour {symbol} dans {base_dir}")
+    latest = files[-1]
+    print(f"Chargement : {latest}")
+    return pd.read_parquet(latest)
+
 
 if __name__ == '__main__':
-    expirations, strikes, tclasses = fetch_chain('ESTX50', 'IND', 'EUREX', currency='EUR')
-    if not expirations:
-        raise RuntimeError("Chaine vide : verifie TWS et les parametres du sous-jacent")
-    print("trading classes:", tclasses)
-    expiration = expirations[2]
-    atm = min(strikes, key=lambda k: abs(k - 5000))
-    strikes_sel = [k for k in strikes if atm - 200 <= k <= atm + 200]
-    tc = list(tclasses)[0]
+    spot = 313.22
 
-    df = fetch_surface('SX5E', expiration, strikes_sel, tradingClass=tc,
-                       exchange='EUREX', currency='EUR', multiplier='10')
-    print(df)
+    expirations, strikes, tclasses = fetch_chain('AAPL')
+    if not expirations:
+        raise RuntimeError("Chaine vide : verifie TWS")
+    print("expirations dispo:", expirations[:8])
+
+    exp_choisies = [expirations[3], expirations[6]]
+
+    atm = min(strikes, key=lambda k: abs(k - spot))
+    strikes_sel = [k for k in strikes if atm - 30 <= k <= atm + 30]
+
+    for i, expiration in enumerate(exp_choisies, start=1):
+        print(f"\n=== Maturite T{i} : {expiration} ===")
+        df = fetch_surface('AAPL', expiration, strikes_sel, tradingClass='AAPL',
+                           exchange='SMART', currency='USD', multiplier='100')
+        print(df)
+        save_surface(df, 'AAPL', spot=spot)
