@@ -2,7 +2,9 @@
 import statsmodels.api as sm
 import pandas as pd
 import numpy as np
-from src.utils.black_scholes import CallBS76, PutBS76
+from src.utils.black_scholes import CallBS76, PutBS76, implied_vol_call76, implied_vol_put76
+from scipy.optimize import least_squares
+from scipy.integrate import quad
 
 def ForwardExtraction(df, weighted=True):
     y = df['call_mid'] - df['put_mid']
@@ -43,3 +45,53 @@ def generate_synthetic_surface(maturities):
                            'call_mid': call, 'put_mid': put})
 
     return pd.DataFrame(lignes)
+
+def orchestrateur(df):
+    lignes = []
+    for T, bloc in df.groupby('maturity'):
+        F, D = ForwardExtraction(bloc, weighted=False)
+
+        for _, row in bloc.iterrows():
+            K = row['Strike']
+            if K >= F:
+                sigma = implied_vol_call76(row['call_mid'], F, K, T, 0.0, D)
+            else:
+                sigma = implied_vol_put76(row['put_mid'], F, K, T, 0.0, D)
+
+            if np.isnan(sigma):
+                continue
+            lignes.append({'maturity': T, 'k': np.log(K/F), 'w': sigma**2 * T})
+
+    return pd.DataFrame(lignes)
+
+def svi_residuals(params, k, w):
+    a, b, rho, m, sigma = params
+    return svi_raw(k, a, b, rho, m, sigma) - w
+
+def calibrate_svi(k, w):
+    x0 = [w.min(), 0.1, -0.5, k[np.argmin(w)], 0.1]
+    lower = [-1e-6, 0.0, -0.999, k.min(), 1e-4]
+    upper = [w.max(), 1.0, 0.999, k.max(), 1.0]
+    res = least_squares(svi_residuals, x0, args=(k, w),
+                        bounds=(lower, upper), method='trf')
+    return res.x
+
+def w_prime(k, a, b, rho, m, sigma):
+    return b*(rho + (k-m)/np.sqrt((k-m)**2 + sigma**2))
+
+def w_second(k, a, b, rho, m, sigma):
+    return b*sigma**2/(np.sqrt((k-m)**2 + sigma**2)**3)
+
+def g_func(k, a, b, rho, m, sigma):
+    w = svi_raw(k, a, b, rho, m, sigma)
+    w1 = w_prime(k, a, b, rho, m, sigma)
+    w2 = w_second(k, a, b, rho, m, sigma)
+
+    return (1 - k*w1/(2*w))**2 - w1**2/4 * (1/w + 1/4) + w2/2
+
+def density(k,params):
+    a, b, rho, m, sigma = params
+    w = svi_raw(k, a, b, rho, m, sigma)
+    g = g_func(k, a, b, rho, m, sigma)
+    d_ = -k/np.sqrt(w) - np.sqrt(w)/2
+    return g/np.sqrt(2*np.pi*w) * np.exp(-1/2 * d_ **2)
