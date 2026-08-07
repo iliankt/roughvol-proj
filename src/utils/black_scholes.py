@@ -87,3 +87,8 @@ def implied_vol_put76(C_obs, F, K, T, t, D,
         return brentq(g, sigma_low, sigma_high, xtol=1e-8, maxiter=100)
     except ValueError:
         return np.nan
+
+def vega76(F, K, T, t, sigma, D):
+    tau = T - t
+    d1 = (np.log(F/K) + 0.5*sigma**2*tau)/(sigma*np.sqrt(tau))
+    return D * F * np.sqrt(tau) * norm.pdf(d1)
