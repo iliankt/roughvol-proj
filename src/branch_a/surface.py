@@ -5,6 +5,9 @@ import numpy as np
 from src.utils.black_scholes import CallBS76, PutBS76, implied_vol_call76, implied_vol_put76
 from scipy.optimize import least_squares
 from scipy.integrate import quad
+from src.data.fetch_surface import load_latest_surface
+from src.data.prepare import prepare_surface
+import matplotlib.pyplot as plt
 
 def ForwardExtraction(df, weighted=True):
     y = df['call_mid'] - df['put_mid']
@@ -95,3 +98,26 @@ def density(k,params):
     g = g_func(k, a, b, rho, m, sigma)
     d_ = -k/np.sqrt(w) - np.sqrt(w)/2
     return g/np.sqrt(2*np.pi*w) * np.exp(-1/2 * d_ **2)
+
+if __name__ == '__main__':
+    df1_raw = load_latest_surface('AAPL')
+    df1 = prepare_surface(df1_raw)
+    grid1 = orchestrateur(df1)
+    k = grid1['k'].values
+    w = grid1['w'].values
+    params1 = calibrate_svi(k, w)
+    
+
+    k_plot = np.linspace(k.min(), k.max(), 200)
+    densite = density(k_plot,params1)
+    w_fit = svi_raw(k_plot, *params1)
+    F = ForwardExtraction(df1)[0]
+    mass, _ = quad(lambda k: density(k, params1), k.min()-0.2, k.max()+0.2)
+    print("masse :", mass)
+
+    mean, _ = quad(lambda k: F*np.exp(k)*density(k, params1), k.min()-0.2, k.max()+0.2)
+    print("E[S_T] :", mean, " vs forward :", F)
+
+    plt.plot(k_plot, densite, 'r-', label='Densité')
+    plt.xlabel('k (log-moneyness)'); plt.ylabel('g')
+    plt.legend(); plt.show()
