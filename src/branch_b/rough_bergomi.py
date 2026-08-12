@@ -29,18 +29,25 @@ def build_cov(H, kappa, n):
 
     return C
 
-def hybride_scheme(H,kappa,T,n):
-    alpha = H - 1/2
-    cov = build_cov(H,kappa,n)
-    L = np.linalg.cholesky(cov)
-    Z = np.random.standard_normal((n,kappa+1))
+def build_weights(H, kappa, n):
+    alpha = H - 0.5
+    return np.array([(1/n)**alpha * (k**(alpha+1) - (k-1)**(alpha+1))/(alpha+1)
+                     for k in range(kappa + 1, n)])
+
+def hybride_scheme_vect(H, kappa, T, n, M, L, g):
+    Z = np.random.standard_normal((M, n, kappa+1))
     couples = Z @ L.T
-    g = [(1/n)**alpha * (k**(alpha+1) - (k-1)**(alpha+1))/(alpha+1) for k in range(kappa + 1,n)]
-    dW = couples[:, 0] 
-    W = fftconvolve(dW, g)
-    W = np.concatenate([np.zeros(kappa+1), W])[:n]
-    I = couples[:,1:].sum(axis=1)
-    return (np.sqrt(2*H) * (I + W), dW)
+
+    dW = couples[:, :, 0]
+    I = couples[:, :, 1:].sum(axis=2)
+
+    W = fftconvolve(dW, g[None, :], axes=1)
+
+    pad = np.zeros((M, kappa+1))
+    W = np.concatenate([pad, W], axis=1)[:, :n]
+
+    W_hat = np.sqrt(2*H) * (I + W)
+    return W_hat, dW
 
 def variance_process(W_hat, xi0, eta, H, T, n):
     ti = np.arange(n) / n * T
@@ -48,23 +55,20 @@ def variance_process(W_hat, xi0, eta, H, T, n):
     V = xi0 * np.exp(eta * W_hat - correction)
     return V
 
-def price_simu(S0,H,kappa,T,n,xi0,eta,rho):
+def price_simu_vect(S0, H, kappa, T, n, xi0, eta, rho, M, L, g):
     dt = 1/n
-    W_hat, dW = hybride_scheme(H,kappa,T,n)
-    V = variance_process(W_hat,xi0,eta,H,T,n)
-    delta_W = np.random.standard_normal(size=n) * np.sqrt(dt)
+    W_hat, dW = hybride_scheme_vect(H, kappa, T, n, M, L, g)
+    V = variance_process(W_hat, xi0, eta, H, T, n)
+    delta_W = np.random.standard_normal((M, n)) * np.sqrt(dt)
     dZ = rho*dW + np.sqrt(1-rho**2)*delta_W
-    increments = -0.5 * V[:-1] * dt + np.sqrt(V[:-1]) * dZ[1:]
-    logS = np.concatenate([[0], np.cumsum(increments)])
+    increments = -0.5 * V[:, :-1] * dt + np.sqrt(V[:, :-1]) * dZ[:, 1:]
+    logS = np.concatenate([np.zeros((M, 1)), np.cumsum(increments, axis=1)], axis=1)
     return S0 * np.exp(logS)
 
-def price_forward_start(S0,H,kappa_bergomi,T1,T2,n,xi0,eta,rho,kappa_strike,M):
+def price_forward_start(S0, H, kappa_bergomi, T1, T2, n, xi0, eta, rho, kappa_strike, M):
     i1 = int(T1/T2 * n)
-    payoffs = np.empty(M)
-    for m in range(M):
-        S = price_simu(S0,H,kappa_bergomi,T2,n,xi0,eta,rho)
-        payoffs[m] = max(S[-1]/S[i1] - kappa_strike,0) 
+    L = np.linalg.cholesky(build_cov(H, kappa_bergomi, n))
+    g = build_weights(H, kappa_bergomi, n)
+    S = price_simu_vect(S0, H, kappa_bergomi, T2, n, xi0, eta, rho, M, L, g)
+    payoffs = np.maximum(S[:, -1]/S[:, i1] - kappa_strike, 0)
     return payoffs.mean()
-
-prix = price_forward_start(100, 0.1, 1, 0.5, 1.0, 500, 0.04, 1.5, -0.7, 1.0, 5000)
-print("prix forward-start :", prix)
