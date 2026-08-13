@@ -19,7 +19,7 @@ class IBApp(EClient,EWrapper):
         self.connected = Event()
 
     def historicalData(self, reqId, bar):
-        self.data.append({'time' : bar.time,
+        self.data.append({'datetime' : bar.date,
                           'open' : bar.open,
                           'close' : bar.close,
                           'high' : bar.high,
@@ -50,7 +50,7 @@ def run(app):
 
 def get_historical_data(symbol,bar_size,what_to_show,end_time,duration_str):
     app = IBApp()
-    app.connect()
+    app.connect('127.0.0.1',7497,123)
     app_threading = Thread(target=run,args=(app,))
     app_threading.start()
     app.connected.wait(timeout=5)
@@ -82,7 +82,7 @@ def get_historical_data(symbol,bar_size,what_to_show,end_time,duration_str):
             df['whatToShow'] = what_to_show
             df['barSize'] = bar_size
             df = df.rename(columns={'datetime': 'ts_utc'})
-            df = df[['ts_utc','open','high','low','close','volume','wap','barCount','symbol','barSize','whatToShow']]
+            df = df[['ts_utc','open','high','low','close','symbol','barSize','whatToShow']]
             for jour, df_jour in df.groupby(df['ts_utc'].dt.date):   
                 write_date(df_jour,symbol,bar_size,what_to_show)
 
