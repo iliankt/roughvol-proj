@@ -126,7 +126,7 @@ def fetch_surface(symbol, expiration, strikes, tradingClass, rights=('C', 'P'),
     return pd.DataFrame(list(app.data.values()))
 
 def save_surface(df, symbol, spot=None, base_dir='data', delayed=True):
-
+    expiration = str(df['maturity'].iloc[0])
     ts = datetime.now(timezone.utc)
     ts_str = ts.strftime('%Y%m%d_%H%M%S')
 
@@ -139,7 +139,7 @@ def save_surface(df, symbol, spot=None, base_dir='data', delayed=True):
     out_dir = os.path.join(base_dir, symbol)
     os.makedirs(out_dir, exist_ok=True)
 
-    path = os.path.join(out_dir, f'surface_{symbol}_{ts_str}.parquet')
+    path = path = os.path.join(out_dir, f'surface_{symbol}_{expiration}.parquet')
     df.to_parquet(path, index=False)
     print(f"Snapshot sauvegarde : {path}  ({len(df)} lignes)")
     return path
@@ -157,17 +157,16 @@ def load_latest_surface(symbol, base_dir='data'):
 
 
 if __name__ == '__main__':
-    spot = 313.22
+    spot = 304.76
 
     expirations, strikes, tclasses = fetch_chain('AAPL')
     if not expirations:
         raise RuntimeError("Chaine vide : verifie TWS")
-    print("expirations dispo:", expirations[:8])
 
-    exp_choisies = [expirations[3], expirations[6]]
+    exp_choisies = [expirations[9], expirations[13]]
 
     atm = min(strikes, key=lambda k: abs(k - spot))
-    strikes_sel = [k for k in strikes if atm - 30 <= k <= atm + 30]
+    strikes_sel = [k for k in strikes if atm - 50 <= k <= atm + 50]
 
     for i, expiration in enumerate(exp_choisies, start=1):
         print(f"\n=== Maturite T{i} : {expiration} ===")
