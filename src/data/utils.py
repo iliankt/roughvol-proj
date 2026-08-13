@@ -1,6 +1,9 @@
 import os
 from datetime import timezone
 from datetime import timedelta
+import pandas as pd
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 def write_date(df_day,symbol,bar_size,what_to_show):
     bar_size = bar_size.replace(' ','')
@@ -47,3 +50,32 @@ def plan_backfill(start, end, bar_time):
         curseur = debut
 
     return tranches
+
+def list_days(start, end):
+    jours = []
+    curseur = start
+
+    while curseur <= end:
+        jours.append(curseur.strftime('%Y-%m-%d'))
+        curseur += timedelta(days=1)
+    return jours
+
+
+def path_for_day(symbol,bar_size,what_to_show,date):
+    bar_size = bar_size.replace(' ','')
+    chemin_dossier = os.path.join(PROJECT_ROOT,"data", "bars", symbol, bar_size, what_to_show)
+    chemin_fichier = os.path.join(chemin_dossier,f"{date}.parquet")
+    return chemin_fichier
+
+def read_range(symbol,bar_size,what_to_show,start,end):
+    dfs = []
+    jours = list_days(start,end)
+    for jour in jours:
+        path = path_for_day(symbol,bar_size,what_to_show,jour)
+        if os.path.exists(path):
+            dfs.append(pd.read_parquet(path))
+    if len(dfs) > 0:
+        df = pd.concat(dfs).sort_values('ts_utc').reset_index(drop=True)
+        return df
+    else:
+        return pd.DataFrame()
