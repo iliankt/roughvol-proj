@@ -77,5 +77,3 @@ def mot_bounds(x1, p1, x2, p2, kappa):
     P_min = res_min.fun
     P_max = -res_max.fun
     return P_min, P_max
-
-

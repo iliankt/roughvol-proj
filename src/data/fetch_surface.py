@@ -125,6 +125,16 @@ def fetch_surface(symbol, expiration, strikes, tradingClass, rights=('C', 'P'),
 
     return pd.DataFrame(list(app.data.values()))
 
+def load_surface_by_maturity(symbol, maturity, base_dir='data'):
+
+    pattern = os.path.join(base_dir, symbol, f'surface_{symbol}_{maturity}*.parquet')
+    files = sorted(glob.glob(pattern))
+    if not files:
+        raise FileNotFoundError(f"Aucune surface pour {symbol} maturite {maturity}")
+    latest = files[-1]
+    print(f"Chargement : {latest}")
+    return pd.read_parquet(latest)
+
 def save_surface(df, symbol, spot=None, base_dir='data', delayed=True):
     expiration = str(df['maturity'].iloc[0])
     ts = datetime.now(timezone.utc)

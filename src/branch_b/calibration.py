@@ -33,11 +33,6 @@ def calibrate_rough_bergomi(H, kappa, n, M, params_init, maturite_idx=0):
     T = float(df_mat['maturity'].iloc[0])
     Ks = df_mat['Strike'].values
     prices_marche = df_mat['call_mid'].values
-
-    print(f"maturité {mat} : T={T:.4f}, S0={S0}, {len(Ks)} strikes")
-    print(f"strikes : {Ks.min():.0f} -> {Ks.max():.0f}")
-
     params, err = optim(S0, Ks, H, kappa, T, n, M, prices_marche, params_init)
-    print(f"params calibrés : xi0={params[0]:.4f}, eta={params[1]:.4f}, rho={params[2]:.4f}")
-    print(f"erreur finale : {err:.6f}")
+
     return params, err

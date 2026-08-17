@@ -74,7 +74,7 @@ def price_simu_vect(S0, H, kappa, T, n, xi0, eta, rho, M, L, g, rng=None):
 
 def price_forward_start(S0, H, kappa_bergomi, T1, T2, n, xi0, eta, rho, kappa_strike, M):
     n_steps = int(T2 * n)
-    i1 = int(T1/T2 * n)
+    i1 = int(T1 * n)
     L = np.linalg.cholesky(build_cov(H, kappa_bergomi, n))
     g = build_weights(H, kappa_bergomi, n,n_steps)
     S = price_simu_vect(S0, H, kappa_bergomi, T2, n, xi0, eta, rho, M, L, g)
