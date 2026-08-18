@@ -41,7 +41,7 @@ The pipeline is organized in four branches:
 ## Data
 
 Market data are snapshots extracted through the Interactive Brokers API
-(delayed data). The repository ships with figured AAPL surfaces and 5-minute
+(delayed data). The repository ships with pre-captured AAPL surfaces and 5-minute
 bars so that the full pipeline is reproducible without live market access. Data
 are a fixed snapshot in time; running the demo reproduces the results on that
 snapshot.
