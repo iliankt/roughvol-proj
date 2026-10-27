@@ -11,6 +11,8 @@ def prepare_surface(df):
     df['mid'] = (df['ask'] + df['bid']) / 2
     df['spread'] = df['ask'] - df['bid']
 
+    snap = pd.to_datetime(df['snapshot_utc'].iloc[0]).tz_localize(None)
+
     new_df = df.pivot(index=['maturity','strike'], columns='right',
                       values=['mid','spread'])
 
@@ -18,5 +20,5 @@ def prepare_surface(df):
     new_df = new_df.reset_index().rename(columns={'strike': 'Strike'})
 
     new_df = new_df.dropna(subset=['call_mid', 'put_mid'])
-    new_df['maturity'] = new_df['maturity'].apply(to_maturity)
+    new_df['maturity'] = new_df['maturity'].apply(lambda e: to_maturity(e, snap))
     return new_df
